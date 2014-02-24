@@ -3,6 +3,7 @@ require 'sinatra'
 require 'sinatra/reloader' if development?
 require 'net/https'
 require 'uri'
+require 'json'
 
 abort 'Please set HatebuWebHookKey environment variable.' unless ENV.has_key?('HatebuWebHookKey')
 abort 'Please set ChatWorkRoomID environment variable.' unless ENV.has_key?('ChatWorkRoomID')
@@ -15,25 +16,23 @@ end
 post '/' do
   halt 'invalid key' unless params['key'] == ENV['HatebuWebHookKey']
   halt 'invalid status' unless params['status'] == 'add'
-  halt 'do not bypass' unless params['comment'] =~ /\[_\]/
+  halt 'do not bypass' unless params['comment'] =~ /\[_\]/ # TBD: post bookmarked info to chatwork when tags contain underscore
 
-  body = "[info][title]#{params['title']}[/title]#{params['url']}[/info]"
+  Net::HTTP.start('api.chatwork.com', Net::HTTP.https_default_port, use_ssl: true) do |https|
+    https.verify_mode = OpenSSL::SSL::VERIFY_NONE
 
-  endpoint = "https://api.chatwork.com/v1/rooms/#{ENV['ChatWorkRoomID']}/messages"
-  header = {'Content-Type' => 'application/x-www-form-urlencoded', 'X-ChatWorkToken' => ENV['ChatWorkToken']}
+    response = https.post(
+      "/v1/rooms/#{ENV['ChatWorkRoomID']}/messages",
+      "body=[info][title]#{params['title']}[/title]#{params['url']}[/info]",
+      { 'X-ChatWorkToken' => ENV['ChatWorkToken'] }
+    )
 
-  request = Net::HTTP::Post.new(endpoint, header)
-  request.body = "body=#{body}"
-
-  https = Net::HTTP.new('api.chatwork.com', 443)
-  https.use_ssl = true
-  https.verify_mode = OpenSSL::SSL::VERIFY_NONE
-
-  https.start do |client|
-    response = client.request(request)
+    message_id = JSON.parse(response.body)['message_id']
 
     if response.code == '200'
-      'OK'
+      "Success! Message(id: #{message_id}) is posted."
+    else
+      "Failed! Message(id: #{message_id}) is not posted."
     end
   end
 end
