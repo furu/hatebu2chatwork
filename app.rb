@@ -2,7 +2,6 @@ require 'bundler/setup'
 require 'sinatra'
 require 'sinatra/reloader' if development?
 require 'net/https'
-require 'uri'
 require 'json'
 
 abort 'Please set HatebuWebHookKey environment variable.' unless ENV.has_key?('HatebuWebHookKey')
